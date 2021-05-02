@@ -23,9 +23,9 @@ def get_winners(min_n, max_n, num_win, block_num):
         winners.add(int(res, 16) % (max_n-min_n+1) + min_n)
     return winners
 
-
-open_block=52325000#开奖区块号
+#{'season': 1, 'winners': {24, 9, 22, 6}, 'max_lucky_number': 29, 'open_block': 53353400} 第一期开奖信息
+open_block=53353400#开奖区块号
 min_lucky_number=0#最小奖卷号
-max_lucky_number=100#最大奖卷号
+max_lucky_number=29#最大奖卷号
 winners=get_winners(min_lucky_number,max_lucky_number,4,open_block)
 print(winners)
