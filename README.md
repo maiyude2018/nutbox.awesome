@@ -5,6 +5,7 @@
 - set.json 设定文件
 - tickets.db 日志数据库
 - winner.py 开奖程序
+- open_win.py 发送奖金程序
 
 ## 用法：
 - 1、购买彩票：向nutbow.awesome转账任意整数STEEM，memo：buy，即可购买。购买成功会自动回复彩卷号码
