@@ -20,8 +20,9 @@ cur = con.cursor()
 
 
 nodes = 'https://cn.steems.top'
-keys='5K5sJ3d5yVnL'
+keys='5KnL'
 master="nutbox.awesome"
+
 
 
 bot_set = dict()
@@ -49,8 +50,8 @@ def get_season_winners(body):
         str=all[0][0]+","+all[0][2]+":"+all[0][4]
         return str
 #获得用户奖卷信息
-def get_player_tickets(player):
-    whois = 'select * from tickets where owner = "%s" and type = "buy"' % player
+def get_player_tickets(player,season):
+    whois = 'select * from tickets where owner = "%s" and type = "buy"  and season = %s' % (player,season)
     cur.execute(whois)
     all = cur.fetchall()
     if all == []:
@@ -82,8 +83,7 @@ def get_winners(min_n=0, num_win=4):
                 open_block = memo_json["open_block"]
                 print(max_lucky_number, open_block)
                 break
-    #todo 一会测试完删掉这行
-    #open_block = 53266004
+
 
     for i in range(5):
         data = {"jsonrpc": "2.0", "method": "condenser_api.get_block", "params": [open_block], "id": 1}
@@ -105,7 +105,7 @@ def get_winners(min_n=0, num_win=4):
     while len(winners) < num_win:
         res = hashlib.sha256(res.encode('utf-8')).hexdigest()
         winners.add(int(res, 16) % (max_lucky_number-min_n+1) + min_n)
-    return winners
+    return winners,max_lucky_number
 
 #检查事务是否存在，防重放
 def check_txid(transaction_id):
@@ -225,20 +225,32 @@ while True:
                                     con.commit()
                             else:
                                 try:
-                                    numbers=int(amount)#2
-                                    lucky_number = []
-                                    for w in range(numbers):
-                                        bot_set['last_lucky_number'] += 1
-                                        lucky_number.append(bot_set['last_lucky_number'])
-                                    tickets = {"season": season,  "lucky_number": lucky_number,"owner": owner,"open_block":open_block}
-                                    re = transfer_token(s, master, owner, "0.001 STEEM", str(tickets))
-                                    expiration = re["expiration"]
-                                    print(transaction_id,expiration)
-                                    print(re)
-                                    cur.execute('REPLACE INTO tickets VALUES (?,?,?,?,?,?,?)', (transaction_id, expiration, "buy", season, str(lucky_number),owner,open_block))
-                                    con.commit()
-                                    with open('set.json', 'w', encoding='utf-8') as f1:
-                                        f1.write(json.dumps(bot_set, indent=4, ensure_ascii=False))
+                                    if amount < 1:
+                                        print("Back,At least need 1STEEM!")
+                                        memos = "BACK!,At least need 1STEEM"
+                                        # re = Account(master, steem_instance=s).transfer(owner, amount, "STEEM",memos)
+                                        re = transfer_token(s, master, owner, amount_str, memos)
+                                        expiration = re["expiration"]
+                                        print(transaction_id, expiration)
+                                        print(re)
+                                        cur.execute('REPLACE INTO tickets VALUES (?,?,?,?,?,?,?)', (
+                                        transaction_id, expiration, "back_limit", season, amount_str, owner, open_block))
+                                        con.commit()
+                                    else:
+                                        numbers=int(amount)#2
+                                        lucky_number = []
+                                        for w in range(numbers):
+                                            bot_set['last_lucky_number'] += 1
+                                            lucky_number.append(bot_set['last_lucky_number'])
+                                        tickets = {"season": season,  "lucky_number": lucky_number,"owner": owner,"open_block":open_block}
+                                        re = transfer_token(s, master, owner, "0.001 STEEM", str(tickets))
+                                        expiration = re["expiration"]
+                                        print(transaction_id,expiration)
+                                        print(re)
+                                        cur.execute('REPLACE INTO tickets VALUES (?,?,?,?,?,?,?)', (transaction_id, expiration, "buy", season, str(lucky_number),owner,open_block))
+                                        con.commit()
+                                        with open('set.json', 'w', encoding='utf-8') as f1:
+                                            f1.write(json.dumps(bot_set, indent=4, ensure_ascii=False))
                                 except Exception as e:
                                     print("buy,error:", e)
                                     expiration = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
@@ -278,8 +290,8 @@ while True:
                                 #parent_author=operations[1]["parent_author"]
                                 parent_permlink = operations[1]["permlink"]
                                 author = operations[1]["author"]
-                                my_tickets=get_player_tickets(author)
-                                body_new="Your tickets:"+str(my_tickets)
+                                my_tickets=get_player_tickets(author,season)
+                                body_new="Your tickets:"+str(my_tickets)+",season:"+str(season)+",open_block:"+str(open_block)
                                 re=posts(s, author, parent_permlink, master, body_new)
                                 expiration = re["expiration"]
                                 cur.execute('REPLACE INTO tickets VALUES (?,?,?,?,?,?,?)',(transaction_id, expiration, "re_post", season, body_new, author, open_block))
@@ -306,7 +318,7 @@ while True:
                                 # parent_author=operations[1]["parent_author"]
                                 parent_permlink = operations[1]["permlink"]
                                 author = operations[1]["author"]
-                                my_tickets = get_player_tickets(author)
+                                my_tickets = get_player_tickets(author,season)
                                 #获取得奖信息
                                 body_new = get_season_winners(body)
                                 re = posts(s, author, parent_permlink, master, body_new)
@@ -337,11 +349,18 @@ while True:
                 bot_set['last_lucky_number'] = -1
                 with open('set.json', 'w', encoding='utf-8') as f1:
                     f1.write(json.dumps(bot_set, indent=4, ensure_ascii=False))
-                winners=get_winners()
+                winners,max_lucky_number=get_winners()
                 print("获奖者是:",winners)
                 expiration = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
-                cur.execute('REPLACE INTO tickets VALUES (?,?,?,?,?,?,?)',("season"+str(season), expiration, "winners", season, str(winners), "winners", open_block))
+                cur.execute('REPLACE INTO tickets VALUES (?,?,?,?,?,?,?)',("season"+str(season), expiration, "winners", season, str(winners), str(max_lucky_number), open_block))
                 con.commit()
+                #memos = "season:" + str(season) + ",winners:"+str(winners)+",max_lucky_number:"+str(max_lucky_number)+",open_block:"+str(open_block)
+                memos = {"season":season,"winners":winners,"max_lucky_number":max_lucky_number,"open_block":open_block}
+                re = transfer_token(s, master, "season.all", "0.001 STEEM", str(memos))
+
+                season = bot_set['season']
+                open_block = bot_set['open_block']
+                last_lucky_number = bot_set['last_lucky_number']
             except Exception as e:
                 print("open_reward,error:",e)
                 expiration = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
